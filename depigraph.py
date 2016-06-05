@@ -300,7 +300,12 @@ def go(target, wheeldir, write_dot):
     for name in all_packages.keys():
         extras_to_show[(name, None)] = "black"
 
-    scan(root_pkgname)
+    mo = re.search(r'(\w+)\[(\w+)]', root_pkgname)
+    extra = None
+    if mo:
+        root_pkgname = mo.group(1)
+        extra = mo.group(2)
+    scan(root_pkgname, extra)
     f = generate_dot()
 
     if write_dot:
