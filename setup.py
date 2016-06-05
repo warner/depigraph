@@ -4,7 +4,7 @@ from setuptools import setup
 
 setup(
     name="depigraph",
-    version="0.5.0",
+    version="0.5.1",
     description="Draw dependency graphs for python distributions",
     author="Brian Warner",
     author_email="warner-depigraph@lothar.com",
