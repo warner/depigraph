@@ -84,24 +84,24 @@ def parse_metadata_json(f):
     md = json.loads(f.read().decode("utf-8"))
     name = md["name"].lower()
     version = md["version"]
-    try:
-        reqs = {None: []} # extra_name/None -> [specs]
-        if "run_requires" in md:
-            for r in md["run_requires"]:
-                reqs[r.get("extra", None)] = r["requires"]
-        # this package provides the following extras
-        extras = md.get("extras", [])
-        #for e in extras:
-        #    if e not in reqs:
-        #        reqs[e] = []
-    except KeyError:
-        print("error in '%s'" % name)
-        pprint(md)
-        raise
+
+    reqs = {None: []} # extra_name/None -> [specs]
+    extras = md.get("extras", [])
+
+    for r in md.get("run_requires", []):
+        dest_key = r.get("extra", None)
+        reqs_value = reqs.get(dest_key, None)
+
+        # If we haven't seen this requirement, set as an empty list
+        if reqs_value is None:
+            reqs_value = reqs[dest_key] = []
+
+        reqs_value.extend(r.get("requires", []))
+
     add(name, version, extras, reqs, md)
     return name
 
-def parse_METADATA(f):
+def parse_metadata(f):
     data = f.read().decode("utf-8")
     md = email.parser.Parser().parsestr(data)
 
@@ -126,14 +126,14 @@ def parse_METADATA(f):
 def get_filenames(names, tail):
     return [n for n in names if n.endswith(tail)]
 
-def get_metadata_name(zf, filenames):
+def get_metadata_by_filenames(zf, filenames):
     json_md_fns = get_filenames(filenames, ".dist-info/metadata.json")
     if json_md_fns:
         return parse_metadata_json(zf.open(json_md_fns[0]))
 
     md_fns = get_filenames(filenames, ".dist-info/METADATA")
     if md_fns:
-        return parse_METADATA(zf.open(md_fns[0]))
+        return parse_metadata(zf.open(md_fns[0]))
 
 def wheel_is_pure(zf, filenames):
     wheel_fns = get_filenames(filenames, ".dist-info/WHEEL")
@@ -152,13 +152,13 @@ def parse_wheels(wheeldir):
         zf = zipfile.ZipFile(os.path.join(wheeldir, fn))
         zfnames = zf.namelist()
 
-        name = get_metadata_name(zf, zfnames)
-        if not name:
+        metadata = get_metadata_by_filenames(zf, zfnames)
+        if not metadata:
             print("no metadata for", fn)
             continue
 
         if wheel_is_pure(zf, zfnames):
-            all_pure.add(name)
+            all_pure.add(metadata)
 
     return get_root_pkgname(wheeldir)
 
