@@ -101,7 +101,7 @@ def parse_metadata_json(f):
     add(name, version, extras, reqs, md)
     return name
 
-def parse_metadata(f):
+def parse_METADATA(f):
     data = f.read().decode("utf-8")
     md = email.parser.Parser().parsestr(data)
 
@@ -133,7 +133,7 @@ def get_metadata_by_filenames(zf, filenames):
 
     md_fns = get_filenames(filenames, ".dist-info/METADATA")
     if md_fns:
-        return parse_metadata(zf.open(md_fns[0]))
+        return parse_METADATA(zf.open(md_fns[0]))
 
 def wheel_is_pure(zf, filenames):
     wheel_fns = get_filenames(filenames, ".dist-info/WHEEL")
