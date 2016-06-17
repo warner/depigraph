@@ -84,20 +84,20 @@ def parse_metadata_json(f):
     md = json.loads(f.read().decode("utf-8"))
     name = md["name"].lower()
     version = md["version"]
-    try:
-        reqs = {None: []} # extra_name/None -> [specs]
-        if "run_requires" in md:
-            for r in md["run_requires"]:
-                reqs[r.get("extra", None)] = r["requires"]
-        # this package provides the following extras
-        extras = md.get("extras", [])
-        #for e in extras:
-        #    if e not in reqs:
-        #        reqs[e] = []
-    except KeyError:
-        print("error in '%s'" % name)
-        pprint(md)
-        raise
+
+    reqs = {None: []} # extra_name/None -> [specs]
+    extras = md.get("extras", [])
+
+    for r in md.get("run_requires", []):
+        dest_key = r.get("extra", None)
+        reqs_value = reqs.get(dest_key, None)
+
+        # If we haven't seen this requirement, set as an empty list
+        if reqs_value is None:
+            reqs_value = reqs[dest_key] = []
+
+        reqs_value.extend(r.get("requires", []))
+
     add(name, version, extras, reqs, md)
     return name
 
@@ -123,31 +123,43 @@ def parse_METADATA(f):
     add(name, version, extras, reqs, data)
     return name
 
+def get_filenames(names, tail):
+    return [n for n in names if n.endswith(tail)]
+
+def get_metadata_by_filenames(zf, filenames):
+    json_md_fns = get_filenames(filenames, ".dist-info/metadata.json")
+    if json_md_fns:
+        return parse_metadata_json(zf.open(json_md_fns[0]))
+
+    md_fns = get_filenames(filenames, ".dist-info/METADATA")
+    if md_fns:
+        return parse_METADATA(zf.open(md_fns[0]))
+
+def wheel_is_pure(zf, filenames):
+    wheel_fns = get_filenames(filenames, ".dist-info/WHEEL")
+    if wheel_fns:
+        with zf.open(wheel_fns[0]) as wheel:
+            for line in wheel:
+                if line.lower().rstrip() == b"root-is-purelib: true":
+                    return True
+    return False
+
 def parse_wheels(wheeldir):
     for fn in os.listdir(wheeldir):
         if not fn.endswith(".whl"):
             continue
+
         zf = zipfile.ZipFile(os.path.join(wheeldir, fn))
         zfnames = zf.namelist()
-        mdfns = [n for n in zfnames if n.endswith(".dist-info/metadata.json")]
-        if mdfns:
-            name = parse_metadata_json(zf.open(mdfns[0]))
-        else:
-            mdfns = [n for n in zfnames if n.endswith(".dist-info/METADATA")]
-            if mdfns:
-                name = parse_METADATA(zf.open(mdfns[0]))
-            else:
-                print("no metadata for", fn)
-                continue
-        is_pure = False
-        wheel_fns = [n for n in zfnames if n.endswith(".dist-info/WHEEL")]
-        if wheel_fns:
-            with zf.open(wheel_fns[0]) as wheel:
-                for line in wheel:
-                    if line.lower().rstrip() == b"root-is-purelib: true":
-                        is_pure = True
-        if is_pure:
-            all_pure.add(name)
+
+        metadata = get_metadata_by_filenames(zf, zfnames)
+        if not metadata:
+            print("no metadata for", fn)
+            continue
+
+        if wheel_is_pure(zf, zfnames):
+            all_pure.add(metadata)
+
     return get_root_pkgname(wheeldir)
 
 # 3: emit a .dot file with a graph of all the dependencies
@@ -207,6 +219,7 @@ def scan(name, extra=None, path=""):
     _scanned.add(dupkey)
     #print("SCAN %s %s[%s]" % (path, name, extra))
     add_extra_to_show(name, extra)
+
     for spec in all_reqs[name][extra]:
         #print("-", spec)
         dep_name, dep_extras, dep_constraint = parse_spec(spec)
