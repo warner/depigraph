@@ -96,6 +96,8 @@ def parse_metadata_json(f):
         if reqs_value is None:
             reqs_value = reqs[dest_key] = []
 
+        if r.get("environment"): # e.g. "sys_platform=='win32'"
+            continue
         reqs_value.extend(r.get("requires", []))
 
     add(name, version, extras, reqs, md)
